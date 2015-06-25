@@ -215,7 +215,7 @@ def eval_dag(dag, filename, dag_id=None):
 
     dag = normalize_dag(dag)
 
-    data = pd.read_csv(filename, sep=';')
+    data = pd.read_csv('data/'+filename, sep=';')
 
     feats = data[data.columns[:-1]]
     targets = data[data.columns[-1]]
