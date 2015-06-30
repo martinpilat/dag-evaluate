@@ -4,8 +4,11 @@ import pandas as pd
 import utils
 from scoop import futures
 import sys
-from sklearn import cross_validation
+from sklearn import cross_validation, preprocessing
 import numpy as np
+import custom_models
+import ml_metrics as mm
+
 
 def data_ready(req, cache):
     """
@@ -18,6 +21,7 @@ def data_ready(req, cache):
     if not isinstance(req, list):
         req = [req]
     return all([r in cache for r in req])
+
 
 def get_data(data_list, data_cache):
     """
@@ -35,6 +39,7 @@ def get_data(data_list, data_cache):
     res = ([t[0] for t in tmp], [t[1] for t in tmp])
     return res
 
+
 def append_all(data_frames):
     if not isinstance(data_frames, list):
         return data_frames
@@ -43,7 +48,6 @@ def append_all(data_frames):
         res.append(data_frames[i])
     return res
 
-from sklearn import preprocessing, feature_selection
 
 def train_dag(dag, train_data):
     models = dict()
@@ -52,15 +56,9 @@ def train_dag(dag, train_data):
     data_cache[dag['input'][2]] = train_data
     models['input'] = True
 
-    num_features = train_data[0].shape[1]
-
     unfinished_models = lambda: [m for m in dag if m not in models]
     data_available = lambda: [m for m in dag if data_ready(dag[m][0], data_cache)]
     next_methods = lambda: [m for m in unfinished_models() if m in data_available()]
-
-    # print("UNDONE:", unfinished_models())
-    # print("AVAIL:", data_available())
-    # print("NEXT:", next_methods())
 
     while next_methods():
 
@@ -76,21 +74,18 @@ def train_dag(dag, train_data):
             else:
                 model = ModelClass(**model_params)
 
-            if isinstance(model, feature_selection.SelectKBest):
-                model = ModelClass(k=(num_features*3)//4, **model_params)
-
             # build the model
             # some models cannot handle cases with only one class, we also need to check we are not working with a list
             # of inputs for an aggregator
-            if isinstance(model, utils.Predictor) and isinstance(targets, pd.Series) and len(targets.unique()) == 1:
-                model = utils.ConstantModel(targets.iloc[0])
+            if isinstance(model, custom_models.Predictor) and isinstance(targets, pd.Series) and len(targets.unique()) == 1:
+                model = custom_models.ConstantModel(targets.iloc[0])
             models[m] = model.fit(features, targets)
 
             # use the model to process the data
-            if isinstance(model, utils.Aggregator):
+            if isinstance(model, custom_models.Aggregator):
                 data_cache[out_name] = model.aggregate(features, targets)
                 continue
-            if isinstance(model, utils.Transformer):
+            if isinstance(model, custom_models.Transformer):
                 trans = model.transform(features)
             else:              # this is a classifier not a preprocessor
                 trans = features                # the data do not change
@@ -104,14 +99,6 @@ def train_dag(dag, train_data):
             else:
                 trans = pd.DataFrame(trans, index=features.index)       # we have only one output, can be numpy array
                 data_cache[out_name] = (trans, targets)                 # save it
-
-    #     print("models:", models)
-    #
-    #     print("UNDONE:", unfinished_models())
-    #     print("AVAIL:", data_available())
-    #     print("NEXT:", next_methods())
-    #
-    # print("DATA:", data_cache.keys())
 
     return models
 
@@ -127,14 +114,9 @@ def test_dag(dag, models, test_data):
     data_available = lambda: [m for m in dag if data_ready(dag[m][0], data_cache)]
     next_methods = lambda: [m for m in unfinished_models() if m in data_available()]
 
-    # print("UNDONE:", unfinished_models())
-    # print("AVAIL:", data_available())
-    # print("NEXT:", next_methods())
-
     while next_methods():
 
         for m in next_methods():
-            # print("Processing:", m)
 
             # obtain the data
             features, targets = get_data(dag[m][0], data_cache)
@@ -149,38 +131,32 @@ def test_dag(dag, models, test_data):
                     data_cache[out_name] = (features, targets)
                 finished[m] = True
                 continue
+
             # use the model to process the data
-            if isinstance(model, utils.Aggregator):
+            if isinstance(model, custom_models.Aggregator):
                 data_cache[out_name] = model.aggregate(features, targets)
                 finished[m] = True
                 continue
-            elif isinstance(model, utils.Transformer):
+            elif isinstance(model, custom_models.Transformer):
                 trans = model.transform(features)
                 targets = pd.Series(targets, index=features.index)
-            else:              # this is a classifier not a preprocessor
-                trans = features                # the data do not change
+            else:                                                       # this is a classifier not a preprocessor
+                trans = features                                        # the data do not change
                 targets = pd.Series(list(model.predict(features)), index=features.index)
 
             # save the outputs
-            if isinstance(trans, list):         # the previous model divided the data into several data-sets
-                trans = [(x, targets.loc[x.index]) for x in trans]     # need to divide the targets
+            if isinstance(trans, list):                     # the previous model divided the data into several data-sets
+                trans = [(x, targets.loc[x.index]) for x in trans]      # need to divide the targets
                 for i in range(len(trans)):
-                    data_cache[out_name[i]] = trans[i]          # save all the data to the cache
+                    data_cache[out_name[i]] = trans[i]                  # save all the data to the cache
             else:
                 trans = pd.DataFrame(trans, index=features.index)       # we have only one output, can be numpy array
                 data_cache[out_name] = (trans, targets)                 # save it
 
             finished[m] = True
 
-        # print("models:", models)
-        #
-        # print("UNDONE:", unfinished_models())
-        # print("AVAIL:", data_available())
-        # print("NEXT:", next_methods())
-        #
-        # print("DATA:", data_cache.keys())
-
     return data_cache['output'][1]
+
 
 def normalize_spec(spec):
     ins, mod, outs = spec
@@ -191,6 +167,7 @@ def normalize_spec(spec):
     if len(outs) == 0:
         outs = 'output'
     return ins, mod, outs
+
 
 def normalize_dag(dag):
     normalized_dag = {k: normalize_spec(v) for (k, v) in dag.items()}
@@ -205,11 +182,10 @@ def normalize_dag(dag):
     rev_aliases = {v: k for k in aliases for v in aliases[k]}
     for i in range(original_len-new_len):
         normalized_dag = {k: ((rev_aliases[ins] if not isinstance(ins, list) and ins in rev_aliases else ins), mod, out)
-                        for (k, (ins, mod, out)) in normalized_dag.items()}
+                          for (k, (ins, mod, out)) in normalized_dag.items()}
 
     return normalized_dag
 
-import ml_metrics as mm
 
 def eval_dag(dag, filename, dag_id=None):
 
@@ -232,24 +208,16 @@ def eval_dag(dag, filename, dag_id=None):
         test_data = (feats.iloc[test_idx], targets.iloc[test_idx])
 
         ms = train_dag(dag, train_data)
-        # print("-"*80)
-        # print("Training Finished")
-        # print("-"*80)
-        # print("MODELS:", ms)
         preds = test_dag(dag, ms, test_data)
-        # print("-"*80)
-        # print("Evaluation finished")
-        # print("-"*80)
+
         acc = mm.quadratic_weighted_kappa(test_data[1], preds)
         errors.append(acc)
-        # print("Test error:", acc)
 
     m_errors = float(np.mean(errors))
     s_errors = float(np.std(errors))
 
-    # print("Model %s: Cross-validation error: %.5f (+-%.5f)" % (dag_id, m_errors, s_errors))
-
     return m_errors, s_errors
+
 
 def safe_dag_eval(dag, filename, dag_id=None):
     try:
@@ -260,6 +228,7 @@ def safe_dag_eval(dag, filename, dag_id=None):
             err.write(str(dag))
     return (), dag_id
 
+
 class Evaluator:
 
     def __init__(self, filename):
@@ -267,6 +236,7 @@ class Evaluator:
 
     def __call__(self, x):
         return safe_dag_eval(x[1], self.filename, x[0])
+
 
 def eval_all(dags, filename):
 
