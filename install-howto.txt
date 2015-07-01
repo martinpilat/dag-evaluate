@@ -1,0 +1,10 @@
+Jak rozchodit dag-evaluate (na windows)
+
+- anaconda pro python 3 win 64 install (http://continuum.io/downloads)
+- ručně nainstalovat scoop-0.7.1 (https://github.com/soravux/scoop/releases/tag/0.7.1)
+  tzn. rozbalit zip a dát v anaconda promptu:
+   C:\temp\scoop-0.7.1>python setup.py install
+- z anaconda promptu ještě doinstalovat ml_metrics:
+   pip install ml_metrics
+- při pouštění python scriptů je pro paralelní běh potřeba (jinak spadne) dát jako interpret options (v run configurations):
+   -m scoop
