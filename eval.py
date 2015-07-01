@@ -174,8 +174,8 @@ def normalize_dag(dag):
 
     original_len = len(normalized_dag)
 
-    aliases = {normalized_dag[k][0]: normalized_dag[k][2] for k in normalized_dag if normalized_dag[k][1] == "copy"}
-    normalized_dag = {k: v for (k, v) in normalized_dag.items() if v[1] != 'copy'}
+    aliases = {normalized_dag[k][0]: normalized_dag[k][2] for k in normalized_dag if normalized_dag[k][1][0] == "copy"}
+    normalized_dag = {k: v for (k, v) in normalized_dag.items() if v[1][0] != 'copy'}
 
     new_len = len(normalized_dag)
 
@@ -259,13 +259,13 @@ if __name__ == '__main__':
     results = shelve.open("results_wilt_tuned", protocol=pickle.HIGHEST_PROTOCOL)
 
     datafile = "wilt.csv"
-    dags = utils.read_json('population_65536.json')
+    dags = utils.read_json('test_pop.json')
     # dags = dags[36076:36077]
 
     remaining_dags = [d for d in enumerate(dags) if str(d[0]) not in results]
     print("Starting...", len(remaining_dags))
 
-    for e in futures.map_as_completed(lambda x: safe_dag_eval(x[1], datafile, x[0]), remaining_dags):
+    for e in map(lambda x: safe_dag_eval(x[1], datafile, x[0]), remaining_dags):
         results[str(e[1])] = e
         print("Model %4d: Cross-validation error: %.5f (+-%.5f)" % (e[1], e[0][0], e[0][1]))
         sys.stdout.flush()
