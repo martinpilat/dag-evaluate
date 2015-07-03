@@ -27,8 +27,9 @@ class DagEvalServer:
             e.g. on the number of attributes in the dataset (like the n_components in PCA).
         :return: The JSON string containing the dictionary of the parameter values for each supported method.
         """
-        ds = pd.read_csv(os.path.join('data', datafile))
-        num_features, num_instances = ds.shape
+        ds = pd.read_csv(os.path.join('data', datafile), sep=';')
+        num_instances, num_features = ds.shape
+        print(num_features, num_instances)
         return method_params.create_param_set(num_features, num_instances)
 
 if __name__ == '__main__':
