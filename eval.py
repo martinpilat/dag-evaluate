@@ -72,11 +72,11 @@ def train_dag(dag, train_data):
             if isinstance(out_name, list):
                 model = ModelClass(len(out_name), **model_params)
             else:
-                if isinstance(ModelClass(), feature_selection.SelectKBest):
+                if 'feat_frac' in model_params and isinstance(ModelClass(), feature_selection.SelectKBest):
                     model_params = model_params.copy()
                     model_params['k'] = max(1, int(model_params['feat_frac']*(features.shape[1]-1)))
                     del model_params['feat_frac']
-                if isinstance(ModelClass(), decomposition.PCA):
+                if 'feat_frac' in model_params and isinstance(ModelClass(), decomposition.PCA):
                     model_params = model_params.copy()
                     model_params['n_components'] = max(1, int(model_params['feat_frac']*(features.shape[1]-1)))
                     del model_params['feat_frac']
