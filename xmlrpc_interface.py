@@ -17,7 +17,7 @@ class DagEvalServer:
         :param datafile: The dataset to evaluate the dags on.
         :return: List of tuples with the scores of each dag on the dataset
         """
-        ret = eval.eval_all(json.loads(json_string)[:10], datafile)
+        ret = eval.eval_all(json.loads(json_string), datafile)
         return ret
 
     def get_param_sets(self, datafile):
