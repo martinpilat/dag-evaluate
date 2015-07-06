@@ -57,13 +57,15 @@ def create_param_set(num_features, num_instances):
     column_counts = list(column_counts[column_counts > 0])
     column_counts = list(map(int, column_counts))
 
+    feat_frac = [0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1]
+
     params = {
         'PCA': {
-            'n_components': column_counts,
+            'feat_frac': feat_frac,
             'whiten': [False, True],
         },
         'kBest': {
-            'k': column_counts,
+            'feat_frac': feat_frac,
         },
         'SVC': {
             'C': [0.1, 0.5, 1.0, 2, 5, 10, 15],
