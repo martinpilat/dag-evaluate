@@ -29,8 +29,7 @@ class DagEvalServer:
         """
         ds = pd.read_csv(os.path.join('data', datafile), sep=';')
         num_instances, num_features = ds.shape
-        print(num_features, num_instances)
-        return method_params.create_param_set(num_features, num_instances)
+        return method_params.create_param_set(num_features - 1, num_instances)
 
 if __name__ == '__main__':
     server = SimpleXMLRPCServer(('localhost', 8080))

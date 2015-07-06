@@ -73,7 +73,6 @@ def create_param_set(num_features, num_instances):
         'logR': {
             'penalty': ['l1', 'l2'],
             'C': [0.1, 0.5, 1.0, 2, 5, 10, 15],
-            'solver': ['newton-cg', 'lbfgs', 'liblinear'],
             'tol': [0.0001, 0.001, 0.01]
         },
         'DT': {
