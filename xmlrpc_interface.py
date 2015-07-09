@@ -6,8 +6,15 @@ import eval
 import method_params
 import pandas as pd
 import os
+import sys
+
+stop_server = False
 
 class DagEvalServer:
+
+    def __init__(self, log_path):
+        self.log_path = log_path
+        self.gen_number = 0
 
     def eval(self, json_string, datafile):
         """
@@ -16,7 +23,11 @@ class DagEvalServer:
         :param datafile: The dataset to evaluate the dags on.
         :return: List of tuples with the scores of each dag on the dataset
         """
-        ret = eval.eval_all(json.loads(json_string), datafile)
+        dags = json.loads(json_string)
+        ret = eval.eval_all(dags, datafile)
+        log_file = os.path.join(self.log_path, 'log_%03d.json' % self.gen_number)
+        json.dump(list(zip(dags, ret)), open(log_file, 'w'), indent=1)
+        self.gen_number += 1
         return ret
 
     def get_param_sets(self, datafile):
@@ -31,10 +42,16 @@ class DagEvalServer:
         return method_params.create_param_set(num_features - 1, num_instances)
 
     def quit(self):
-        os.abort()
+        global stop_server
+        stop_server = True
 
 if __name__ == '__main__':
-    server = SimpleXMLRPCServer(('localhost', 8080))
-    server.register_instance(DagEvalServer())
 
-    server.serve_forever()
+    log_path = sys.argv[1]
+    print('log', log_path)
+
+    server = SimpleXMLRPCServer(('localhost', 8080))
+    server.register_instance(DagEvalServer(log_path))
+
+    while not stop_server:
+        server.handle_request()
