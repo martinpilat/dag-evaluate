@@ -7,10 +7,10 @@ import numpy as np
 
 def eval_model(params, features, targets, m_id):
 
-    model = tree.DecisionTreeClassifier()
+    model = svm.SVC()
 
     scorer = metrics.make_scorer(mm.quadratic_weighted_kappa)
-
+    #scorer = metrics.make_scorer(metrics.accuracy_score)
     model.set_params(**params)
     scores = cross_validation.cross_val_score(model, features, targets, cv=5, scoring=scorer)
     return np.mean(scores), np.std(scores), params, m_id
@@ -20,19 +20,19 @@ import sys
 
 if __name__ == '__main__':
 
-    data = pd.read_csv('wilt.csv', sep=';')
+    data = pd.read_csv('data/magic.csv', sep=';')
     features = data[data.columns[:-1]]
     targets = data[data.columns[-1]]
 
+    print(np.unique(targets))
     targets = preprocessing.LabelEncoder().fit_transform(targets)
 
+    print(np.bincount(targets))
     param_grid = [
         {
-            'criterion': ['gini', 'entropy'],
-            'class_weight': [None, 'auto'],
-            'max_depth': [6, 7, 8, 9, 10],
-            'min_samples_leaf': [2, 4, 5, 6, 7, 10],
-            'min_samples_split': [10, 15, 20, 25, 30]
+            'C': [0.1, 0.5, 1.0, 2, 5, 10, 15],
+            'gamma': [0.0, 0.0001, 0.001, 0.01, 0.1, 0.5],
+            'tol': [0.0001, 0.001, 0.01]
         }
     ]
 

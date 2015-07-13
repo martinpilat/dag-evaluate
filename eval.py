@@ -8,7 +8,7 @@ from sklearn import cross_validation, preprocessing, decomposition, feature_sele
 import numpy as np
 import custom_models
 import ml_metrics as mm
-
+import time
 
 def data_ready(req, cache):
     """
@@ -199,11 +199,16 @@ def normalize_dag(dag):
     return normalized_dag
 
 
+input_cache = {}
+
 def eval_dag(dag, filename, dag_id=None):
 
     dag = normalize_dag(dag)
 
-    data = pd.read_csv('data/'+filename, sep=';')
+    if filename not in input_cache:
+        input_cache[filename] = pd.read_csv('data/'+filename, sep=';')
+
+    data = input_cache[filename]
 
     feats = data[data.columns[:-1]]
     targets = data[data.columns[-1]]
@@ -214,6 +219,8 @@ def eval_dag(dag, filename, dag_id=None):
     targets = pd.Series(le.fit_transform(targets), index=ix)
 
     errors = []
+
+    start_time = time.time()
 
     for train_idx, test_idx in cross_validation.StratifiedKFold(targets, n_folds=5):
         train_data = (feats.iloc[train_idx], targets.iloc[train_idx])
@@ -228,7 +235,7 @@ def eval_dag(dag, filename, dag_id=None):
     m_errors = float(np.mean(errors))
     s_errors = float(np.std(errors))
 
-    return m_errors, s_errors
+    return m_errors, s_errors, time.time() - start_time
 
 
 def safe_dag_eval(dag, filename, dag_id=None):
