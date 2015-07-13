@@ -10,3 +10,6 @@
   file -> settings -> project -> project interpreter ... a v dropdownu dát anakondí python
 - při pouštění python scriptů je pro paralelní běh potřeba (jinak spadne) dát jako interpret options (v run configurations):
    -m scoop
+- pouští se pomocí
+    xmlrpc_interface.py <adresar-kam-logovat>
+- evoluce se pouští spuštěním javovského programu z projektu https://github.com/tomkren/dageva
