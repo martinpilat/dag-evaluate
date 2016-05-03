@@ -93,8 +93,8 @@ to 10 used on the input data directly.
 
 ```python
 {
-  "input" : [ [], "input", ["404:0"] ],
-  "407" : [ ["404:0"], ["DT", {"max_depth": 10}], [] ],
+  "input" : [ [], "input", ["IN:0"] ],
+  "DT" : [ ["IN:0"], ["DT", {"max_depth": 10}], [] ],
 }
 ```
 
@@ -106,11 +106,11 @@ set to 0.5. The results of these three methods are aggregated with voting.
 
 ```python
 {
-  "input" : [ [], "input", ["404:0"] ],
-  "407" : [ ["404:0"], ["DT", {"max_depth": 10}], [407:0] ],
-  "408" : [ ["404:0"], ["gaussianNB", {}], [408:0] ],
-  "409" : [ ["404:0"], ["SVC", {"C": 0.5}], ["409:0"] ],
-  "410" : [ ["407:0", "408:0", "409:0"], ["vote", {}], [] ]
+  "input" : [ [], "input", ["IN:0"] ],
+  "DT" : [ ["IN:0"], ["DT", {"max_depth": 10}], [DT:0] ],
+  "GNB" : [ ["IN:0"], ["gaussianNB", {}], [GNB:0] ],
+  "SVC" : [ ["IN:0"], ["SVC", {"C": 0.5}], ["SVC:0"] ],
+  "vote" : [ ["DT:0", "GNB:0", "SVC:0"], ["vote", {}], [] ]
 }
 ```
 
@@ -136,6 +136,29 @@ tree. Finally, voting is used to aggregate the results of the last split.
 }
 ```
 
+## Requirements
+
+1. Python 3
+2. numpy, scipy, pandas, scikit-learn, matplotlib, scoop
 
 ## How it works
 
+Internally, the evaluator runs in iterations. In each iteration, it checks all
+the unprocessed methods and selects those that have all data available. These
+are then trained on their data. It essentially implements a simple topological 
+sorting algorithm.
+
+## Add a new method
+
+Adding new methods is simple for new machine learning methods, which implement
+the scikit-learn interface, just add the method to the `model_names` dictionary
+in `method_params.py` and add the possible values of its parameters to the 
+`create_param_set` method.
+
+For the feature selection methods, do the same, and additionally add the
+handling of the number of selected features to the `train_dag` method in
+`eval.py`. This currently cannot be handled automatically, as the methods
+require the number of features which is not known in advance (e.g. if such a 
+method follows another feature selection methods). Therefore, the number of
+features is handled as a fraction during the parameter search and is transformed
+to the actual number during training.
