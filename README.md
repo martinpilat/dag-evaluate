@@ -27,7 +27,7 @@ basic functions
 
 1. `get_param_sets(datafile)` returns the set of parameters for all 
    machine learning methods the server understands based on the input `datafile` 
-   (the ranges of parameters for some methods may change depending e.g. the 
+   (the ranges of parameters for some methods may change depending e.g. the
    number of attributes in the dataset)
 2. `evaluate(json_string, datafile)` evaluates the machine learning workflow
    described by the `json_string` (see below) on the `datafile`
@@ -44,12 +44,12 @@ in turn, is a triple `[inputs, [method, parameters], outputs]`.
 In each workflow, an `input` method must be specified, this method has no
 inputs, and is used only to rename the input file to an ID which is used in the
 rest of the workflow. For example, the following method specification tells the
-system that the input file will be referenced as `"123:0"` in the rest of the 
+system that the input file will be referenced as `"IN:0"` in the rest of the
 workflow.
 
-```python
+```json
 {
- "input" : [ [], "input", ["123:0"] ],
+ "input" : [ [], "input", ["IN:0"] ],
  ...
 }
 ```
@@ -91,10 +91,10 @@ Let's provide a few examples of workflow specifications.
 This workflow contains only a single decision tree classifier with depth limited
 to 10 used on the input data directly. 
 
-```python
+```json
 {
   "input" : [ [], "input", ["IN:0"] ],
-  "DT" : [ ["IN:0"], ["DT", {"max_depth": 10}], [] ],
+  "DT" : [ ["IN:0"], ["DT", {"max_depth": 10}], [] ]
 }
 ```
 
@@ -104,11 +104,11 @@ This workflow contains a decision tree with maximum depth of 10, gaussian naive
 Bayes classifier, and a support vector classifier with the complexity constant
 set to 0.5. The results of these three methods are aggregated with voting.
 
-```python
+```json
 {
   "input" : [ [], "input", ["IN:0"] ],
-  "DT" : [ ["IN:0"], ["DT", {"max_depth": 10}], [DT:0] ],
-  "GNB" : [ ["IN:0"], ["gaussianNB", {}], [GNB:0] ],
+  "DT" : [ ["IN:0"], ["DT", {"max_depth": 10}], ["DT:0"] ],
+  "GNB" : [ ["IN:0"], ["gaussianNB", {}], ["GNB:0"] ],
   "SVC" : [ ["IN:0"], ["SVC", {"C": 0.5}], ["SVC:0"] ],
   "vote" : [ ["DT:0", "GNB:0", "SVC:0"], ["vote", {}], [] ]
 }
@@ -123,7 +123,7 @@ with a decision tree. The results of these two methods are merged back together
 with voting. Additionally, the raw data are also processed with another decision
 tree. Finally, voting is used to aggregate the results of the last split.
 
-```python
+```json
 {
   "input" : [ [], "input", ["IN:0"] ],
   "PCA" : [ ["IN:0"], ["PCA", {"feat_frac": 0.1}], ["PCA:0"] ],
