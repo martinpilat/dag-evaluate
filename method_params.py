@@ -44,9 +44,11 @@ def create_param_set(num_features, num_instances):
             'tol': [0.0001, 0.001, 0.01]
         },
         'logR': {
-            'penalty': ['l1', 'l2'],
+            'penalty': ['l2'],
             'C': [0.1, 0.5, 1.0, 2, 5, 10, 15],
-            'tol': [0.0001, 0.001, 0.01]
+            'tol': [0.0001, 0.001, 0.01],
+            'solver': ['sag']
+
         },
         'DT': {
             'criterion': ['gini', 'entropy'],

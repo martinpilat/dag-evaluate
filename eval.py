@@ -17,7 +17,7 @@ import custom_models
 import utils
 from sklearn.base import ClassifierMixin, RegressorMixin
 
-memory = joblib.Memory(cachedir='C:/cache', verbose=True)
+memory = joblib.Memory(cachedir='C:/cache', verbose=False)
 
 @memory.cache
 def fit_model(model, values, targets, sample_weight=None):
@@ -288,8 +288,8 @@ input_cache = {}
 def eval_dag(dag, filename, dag_id=None):
 
     dag = normalize_dag(dag)
-
     # utils.draw_dag(dag)
+    # pprint.pprint(dag)
 
     if filename not in input_cache:
         input_cache[filename] = pd.read_csv('data/'+filename, sep=';')

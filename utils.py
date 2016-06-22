@@ -62,8 +62,10 @@ def to_pydot_graph(dag, sub_graph=False, input_edge=None):
 
     for n in dag_nx.nodes():
         label = 'input' if dag[n][1] == 'input' else (dag[n][1][0] + ('(' + ','.join('{}={}'.format(k, v) for k, v in dag[n][1][1].items()) + ')' if dag[n][1][1] else ''))
-        node_name = n
+        node_name = dag[n][0]
         if label=='input':
+            if sub_graph:
+                continue
             node_name = label+gid
             if input_edge != None:
                 outs = dag[n][2]
@@ -75,6 +77,7 @@ def to_pydot_graph(dag, sub_graph=False, input_edge=None):
 
 
         if dag[n][1][0] == 'booster':
+            graph.add_node(pydot.Node(n, label='booster'))
             for sd in dag[n][1][1]['sub_dags']:
                 subgraph = to_pydot_graph(sd, sub_graph=True, input_edge=dag[n][0])
                 graph.add_subgraph(subgraph)
@@ -84,7 +87,10 @@ def to_pydot_graph(dag, sub_graph=False, input_edge=None):
 
     for (f, t) in dag_nx.edges():
         if f == 'input':
-            f = 'input' + gid
+            if input_edge == None:
+                f = 'input' + gid
+            else:
+                f = input_edge
         edge = pydot.Edge(f, t)
         graph.add_edge(edge)
 
