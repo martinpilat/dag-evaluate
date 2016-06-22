@@ -2,44 +2,21 @@ __author__ = 'Martin'
 
 import custom_models
 from sklearn import decomposition, feature_selection, svm, linear_model, naive_bayes, tree
-import numpy as np
 import json
 
-
-def make_transformer(cls):
-    """
-    Adds Transformer to the bases of the cls class, useful in order to distinguish between transformers and predictors.
-    :param cls: The class to turn into a Transformer
-    :return: A class equivalent to cls, but with Transformer among its bases
-    """
-    class Tr(cls, custom_models.Transformer):
-        def __repr__(self):
-            return cls.__name__ + ":" + cls.__repr__(self)
-    return Tr
-
-
-def make_predictor(cls):
-    """
-    Adds Predictor to the bases of the cls class, useful in order to distinguish between transformers and predictors.
-    :param cls: The class to turn into a Predictor
-    :return: A class equivalent to cls, but with Predictor among its bases
-    """
-    class Pr(cls, custom_models.Predictor):
-        def __repr__(self):
-            return cls.__name__ + ":" + cls.__repr__(self)
-    return Pr
-
 model_names = {
-    "PCA":          make_transformer(decomposition.PCA),
-    "kBest":        make_transformer(feature_selection.SelectKBest),
-    "kMeans":       make_transformer(custom_models.KMeansSplitter),
+    "PCA":          custom_models.make_transformer(decomposition.PCA),
+    "kBest":        custom_models.make_transformer(feature_selection.SelectKBest),
+    "kMeans":       custom_models.make_transformer(custom_models.KMeansSplitter),
     "copy":         [],
-    "SVC":          make_predictor(svm.SVC),
-    "logR":         make_predictor(linear_model.LogisticRegression),
-    "gaussianNB":   make_predictor(naive_bayes.GaussianNB),
-    "DT":           make_predictor(tree.DecisionTreeClassifier),
+    "SVC":          custom_models.make_predictor(svm.SVC),
+    "logR":         custom_models.make_predictor(linear_model.LogisticRegression),
+    "gaussianNB":   custom_models.make_predictor(naive_bayes.GaussianNB),
+    "DT":           custom_models.make_predictor(tree.DecisionTreeClassifier),
     "union":        custom_models.Voter,
     "vote":         custom_models.Voter,
+    "stacker":      custom_models.Stacker,
+    "booster":      custom_models.Booster
 }
 
 
@@ -50,12 +27,6 @@ def create_param_set(num_features, num_instances):
     :param num_instances: The number of instances in the dataset.
     :return: Dictionary containing dictionaries with lists of values of parameters for each method.
     """
-    column_counts = [1, 0.05*num_features, 0.1*num_features, 0.25*num_features,
-                     0.5*num_features, 0.75*num_features, num_features]
-    column_counts = list(map(int, column_counts))
-    column_counts = np.unique(column_counts)
-    column_counts = list(column_counts[column_counts > 0])
-    column_counts = list(map(int, column_counts))
 
     feat_frac = [0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1]
 
@@ -69,7 +40,7 @@ def create_param_set(num_features, num_instances):
         },
         'SVC': {
             'C': [0.1, 0.5, 1.0, 2, 5, 10, 15],
-            'gamma': [0.0, 0.0001, 0.001, 0.01, 0.1, 0.5],
+            'gamma': ['auto', 0.0001, 0.001, 0.01, 0.1, 0.5],
             'tol': [0.0001, 0.001, 0.01]
         },
         'logR': {

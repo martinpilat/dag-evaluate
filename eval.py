@@ -1,14 +1,29 @@
 __author__ = "Martin Pilat"
 
-import pandas as pd
-import utils
-from scoop import futures
 import sys
-from sklearn import cross_validation, preprocessing, decomposition, feature_selection
-import numpy as np
-import custom_models
-import ml_metrics as mm
 import time
+import joblib
+import pprint
+
+import ml_metrics as mm
+import numpy as np
+import pandas as pd
+from scoop import futures
+from sklearn import cross_validation, preprocessing, decomposition, feature_selection
+
+import networkx as nx
+
+import custom_models
+import utils
+from sklearn.base import ClassifierMixin, RegressorMixin
+
+memory = joblib.Memory(cachedir='C:/cache', verbose=True)
+
+@memory.cache
+def fit_model(model, values, targets, sample_weight=None):
+    if isinstance(model, ClassifierMixin) or isinstance(model, RegressorMixin):
+        return model.fit(values, targets, sample_weight=sample_weight)
+    return model.fit(values, targets)
 
 def data_ready(req, cache):
     """
@@ -49,7 +64,7 @@ def append_all(data_frames):
     return res
 
 
-def train_dag(dag, train_data):
+def train_dag(dag, train_data, sample_weight=None):
     models = dict()
     data_cache = dict()
 
@@ -69,7 +84,12 @@ def train_dag(dag, train_data):
             features, targets = get_data(dag[m][0], data_cache)
             ModelClass, model_params = utils.get_model_by_name(dag[m][1])
             out_name = dag[m][2]
-            if isinstance(out_name, list):
+            if dag[m][1][0] == 'stacker':
+                sub_dags = extract_subgraphs(dag, m)
+                model_params = dict(sub_dags=sub_dags)
+                model = ModelClass(**model_params)
+                features, targets = train_data
+            elif isinstance(out_name, list):
                 model = ModelClass(len(out_name), **model_params)
             else:
                 if isinstance(ModelClass(), feature_selection.SelectKBest):
@@ -89,19 +109,26 @@ def train_dag(dag, train_data):
             # build the model
             # some models cannot handle cases with only one class, we also need to check we are not working with a list
             # of inputs for an aggregator
-            if isinstance(model, custom_models.Predictor) and isinstance(targets, pd.Series) and len(targets.unique()) == 1:
+            if custom_models.is_predictor(model) and isinstance(targets, pd.Series) and len(targets.unique()) == 1:
                 model = custom_models.ConstantModel(targets.iloc[0])
-            models[m] = model.fit(features, targets)
+            models[m] = fit_model(model, features, targets, sample_weight=sample_weight)
+            model = models[m]  # needed to update model if the result was cached
 
             # use the model to process the data
+            if isinstance(model, custom_models.Stacker):
+                data_cache[out_name] = model.train, train_data[1]
+                continue
             if isinstance(model, custom_models.Aggregator):
                 data_cache[out_name] = model.aggregate(features, targets)
                 continue
-            if isinstance(model, custom_models.Transformer):
+            if custom_models.is_transformer(model):
                 trans = model.transform(features)
             else:              # this is a classifier not a preprocessor
                 trans = features                # the data do not change
-                targets = pd.Series(list(model.predict(features)), index=features.index)
+                if isinstance(features, pd.DataFrame):
+                    targets = pd.Series(list(model.predict(features)), index=features.index)
+                else: # this should happen only inside booster
+                    targets = pd.Series(list(model.predict(features)))
 
             # save the outputs
             if isinstance(trans, list):         # the previous model divided the data into several data-sets
@@ -109,7 +136,10 @@ def train_dag(dag, train_data):
                 for i in range(len(trans)):
                     data_cache[out_name[i]] = trans[i]          # save all the data to the cache
             else:
-                trans = pd.DataFrame(trans, index=features.index)       # we have only one output, can be numpy array
+                if isinstance(features, pd.DataFrame):
+                    trans = pd.DataFrame(trans, index=features.index)       # we have only one output, can be numpy array
+                else:
+                    trans = pd.DataFrame(trans)
                 data_cache[out_name] = (trans, targets)                 # save it
 
     return models
@@ -149,12 +179,15 @@ def test_dag(dag, models, test_data):
                 data_cache[out_name] = model.aggregate(features, targets)
                 finished[m] = True
                 continue
-            elif isinstance(model, custom_models.Transformer):
+            elif custom_models.is_transformer(model):
                 trans = model.transform(features)
                 targets = pd.Series(targets, index=features.index)
             else:                                                       # this is a classifier not a preprocessor
                 trans = features                                        # the data do not change
-                targets = pd.Series(list(model.predict(features)), index=features.index)
+                if isinstance(features, pd.DataFrame):
+                    targets = pd.Series(list(model.predict(features)), index=features.index)
+                else:
+                    targets = pd.Series(list(model.predict(features)))
 
             # save the outputs
             if isinstance(trans, list):                     # the previous model divided the data into several data-sets
@@ -162,7 +195,10 @@ def test_dag(dag, models, test_data):
                 for i in range(len(trans)):
                     data_cache[out_name[i]] = trans[i]                  # save all the data to the cache
             else:
-                trans = pd.DataFrame(trans, index=features.index)       # we have only one output, can be numpy array
+                if isinstance(features, pd.DataFrame):
+                    trans = pd.DataFrame(trans, index=features.index)       # we have only one output, can be numpy array
+                else:
+                    trans = pd.DataFrame(trans)
                 data_cache[out_name] = (trans, targets)                 # save it
 
             finished[m] = True
@@ -180,8 +216,30 @@ def normalize_spec(spec):
         outs = 'output'
     return ins, mod, outs
 
+def extract_subgraphs(dag, node):
+    out = []
+
+    dag_nx = utils.dag_to_nx(dag)
+    reverse_dag_nx = dag_nx.reverse()
+
+    for p in dag_nx.predecessors(node):
+        out.append({k: v for k, v in dag.items() if k in list(nx.dfs_preorder_nodes(reverse_dag_nx, p))})
+
+    for o in out:
+        for k, v in o.items():
+            ins = v[2]
+            if not isinstance(ins, list):
+                ins = [ins]
+            if ins[0] in dag[node][0]:
+                o[k] = v[0], v[1], 'output'
+
+    return out
+
 
 def normalize_dag(dag):
+
+    dag = process_boosters(dag)
+
     normalized_dag = {k: normalize_spec(v) for (k, v) in dag.items()}
 
     original_len = len(normalized_dag)
@@ -199,11 +257,39 @@ def normalize_dag(dag):
     return normalized_dag
 
 
+def process_boosters(dag):
+
+    dag_nx = utils.dag_to_nx(dag)
+
+    processed_dag = dict()
+    sub_dags = []
+    for k, spec in dag.items():
+        if spec[1][0] == 'booBegin':
+            input_name = spec[0]
+            for node in nx.dfs_preorder_nodes(dag_nx, k):
+                node_type = dag[node][1][0]
+                if node == k:
+                    continue
+                if node_type == 'booster':
+                    sub_dags.append(dag[node][1][2])
+                if node_type == 'booEnd':
+                    sub_dags = [normalize_dag(sd) for sd in sub_dags]
+                    processed_dag[k] = (input_name, ['booster', {'sub_dags': sub_dags}], dag[node][2])
+                    break
+        elif spec[1][0] in ['booster', 'booEnd']:
+            continue
+        else:
+            processed_dag[k] = spec
+
+    return processed_dag
+
 input_cache = {}
 
 def eval_dag(dag, filename, dag_id=None):
 
     dag = normalize_dag(dag)
+
+    # utils.draw_dag(dag)
 
     if filename not in input_cache:
         input_cache[filename] = pd.read_csv('data/'+filename, sep=';')
@@ -239,12 +325,17 @@ def eval_dag(dag, filename, dag_id=None):
 
 
 def safe_dag_eval(dag, filename, dag_id=None):
+
+    import traceback
+    import json
     try:
         return eval_dag(dag, filename, dag_id), dag_id
     except Exception as e:
         with open('error.'+str(dag_id), 'w') as err:
             err.write(str(e)+'\n')
-            err.write(str(dag))
+            for line in traceback.format_tb(e.__traceback__):
+                err.write(line)
+            err.write(json.dumps(dag))
     return (), dag_id
 
 
@@ -275,17 +366,37 @@ if __name__ == '__main__':
     import shelve
     import pickle
 
-    results = shelve.open("results_wilt_tuned", protocol=pickle.HIGHEST_PROTOCOL)
+    #results = shelve.open("results_wilt_tuned", protocol=pickle.HIGHEST_PROTOCOL)
+    results = dict()
 
-    datafile = "wilt.csv"
-    dags = utils.read_json('test_pop.json')
+    datafile = "winequality-white.csv"
+    dags = utils.read_json('test_boost.json')
+
+    # pprint.pprint(normalize_dag(dags[0]))
+
     # dags = dags[36076:36077]
+
+    # for d in dags:
+    #     if (len(['ahoj tome' for k, v in d.items() if v[1][0]=='stacker'])) > 1:
+    #         print(d)
+
+    import matplotlib.pyplot as plt
+
+    # subgraphs = extract_subgraphs(normalize_dag(dags[0]), '95')
+
+    # pprint.pprint(subgraphs)
+
+    # g = dag_to_nx(dags[0])
+    # for p in g.predecessors('95'):
+    #     print(p, {k:v for k,v in dags[0].items() if k in list(nx.dfs_preorder_nodes(g.reverse(),  p))})
 
     remaining_dags = [d for d in enumerate(dags) if str(d[0]) not in results]
     print("Starting...", len(remaining_dags))
+    pprint.pprint(remaining_dags)
 
     for e in map(lambda x: safe_dag_eval(x[1], datafile, x[0]), remaining_dags):
         results[str(e[1])] = e
+        print(e)
         print("Model %4d: Cross-validation error: %.5f (+-%.5f)" % (e[1], e[0][0], e[0][1]))
         sys.stdout.flush()
 

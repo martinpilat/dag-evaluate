@@ -3,6 +3,33 @@ __author__ = 'Martin'
 import pandas as pd
 import numpy as np
 from scipy import stats
+from sklearn import cross_validation
+from sklearn import ensemble
+
+def is_transformer(cls):
+    return hasattr(cls, '__dageva_type') and cls.__dageva_type == 'transformer'
+
+def is_predictor(cls):
+    return hasattr(cls, '__dageva_type') and cls.__dageva_type == 'predictor'
+
+def make_transformer(cls):
+    """
+    Adds Transformer to the bases of the cls class, useful in order to distinguish between transformers and predictors.
+    :param cls: The class to turn into a Transformer
+    :return: A class equivalent to cls, but with Transformer among its bases
+    """
+    cls.__dageva_type = 'transformer'
+    return cls
+
+
+def make_predictor(cls):
+    """
+    Adds Predictor to the bases of the cls class, useful in order to distinguish between transformers and predictors.
+    :param cls: The class to turn into a Predictor
+    :return: A class equivalent to cls, but with Predictor among its bases
+    """
+    cls.__dageva_type = 'predictor'
+    return cls
 
 
 class KMeansSplitter:
@@ -49,15 +76,6 @@ class Aggregator:
     def aggregate(self, x, y):
         pass
 
-
-class Transformer:
-    pass
-
-
-class Predictor:
-    pass
-
-
 class Voter(Aggregator):
 
     def fit(self, x, y):
@@ -83,3 +101,71 @@ class Voter(Aggregator):
         if modes.empty:
             return x[0], pd.Series()
         return x[0], pd.Series(modes, index=y[0].index)
+
+
+class Workflow:
+
+    def __init__(self, dag=None):
+        self.dag = dag
+        self.sample_weight = None
+        self.classes_ = None
+
+    def fit(self, X, y, sample_weight=None):
+        import eval  #TODO: Refactor to remove circular imports
+        self.models = eval.train_dag(self.dag, train_data=(X, y), sample_weight=sample_weight)
+        self.classes_ = np.array([0,1,2,3,4,5])
+        return self
+
+    def predict(self, X):
+        import eval  #TODO: Refactor to remove circular imports
+        return np.array(eval.test_dag(self.dag, self.models, test_data=(X, None)))
+
+    def get_params(self, deep=False):
+        return {'dag': self.dag}
+
+    def set_params(self, **params):
+        if 'sample_weight' in params:
+            self.sample_weight = params['sample_weight']
+
+
+class Stacker(Aggregator):
+
+    def __init__(self, sub_dags=[]):
+        self.sub_dags = sub_dags
+
+    def fit(self, X, y):
+
+        preds = []
+        for dag in self.sub_dags:
+            wf = Workflow(dag)
+            preds.append(cross_validation.cross_val_predict(wf, X, y, cv=cross_validation.StratifiedKFold(y, n_folds=5)))
+
+        self.train = pd.DataFrame(preds)
+        self.train = self.train.transpose()
+        self.train.columns = ['p' + str(x) for x in range(len(preds))]
+
+        return self
+
+    def aggregate(self, X, y):
+        res = pd.DataFrame(index=y[0].index)
+        for i in range(len(X)):
+            res["p" + str(i)] = y[i]
+        return res, y[0]
+
+
+class Booster(ensemble.AdaBoostClassifier):
+
+    def __init__(self, sub_dags=()):
+        self.sub_dags = sub_dags
+        self.current_sub_dag = 0
+        super(Booster, self).__init__(base_estimator=Workflow(), n_estimators=len(sub_dags), algorithm='SAMME')
+
+    def _make_estimator(self, append=True):
+
+        estimator = Workflow(self.sub_dags[self.current_sub_dag])
+        self.current_sub_dag += 1
+
+        if append:
+            self.estimators_.append(estimator)
+
+        return estimator
