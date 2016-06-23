@@ -62,7 +62,7 @@ def to_pydot_graph(dag, sub_graph=False, input_edge=None):
 
     for n in dag_nx.nodes():
         label = 'input' if dag[n][1] == 'input' else (dag[n][1][0] + ('(' + ','.join('{}={}'.format(k, v) for k, v in dag[n][1][1].items()) + ')' if dag[n][1][1] else ''))
-        node_name = dag[n][0]
+        node_name = n
         if label=='input':
             if sub_graph:
                 continue

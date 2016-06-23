@@ -85,10 +85,10 @@ def train_dag(dag, train_data, sample_weight=None):
             ModelClass, model_params = utils.get_model_by_name(dag[m][1])
             out_name = dag[m][2]
             if dag[m][1][0] == 'stacker':
-                sub_dags = extract_subgraphs(dag, m)
+                sub_dags, input_data = extract_subgraphs(dag, m)
                 model_params = dict(sub_dags=sub_dags)
                 model = ModelClass(**model_params)
-                features, targets = train_data
+                features, targets = data_cache[input_data]
             elif isinstance(out_name, list):
                 model = ModelClass(len(out_name), **model_params)
             else:
@@ -116,7 +116,7 @@ def train_dag(dag, train_data, sample_weight=None):
 
             # use the model to process the data
             if isinstance(model, custom_models.Stacker):
-                data_cache[out_name] = model.train, train_data[1]
+                data_cache[out_name] = model.train, targets
                 continue
             if isinstance(model, custom_models.Aggregator):
                 data_cache[out_name] = model.aggregate(features, targets)
@@ -216,6 +216,7 @@ def normalize_spec(spec):
         outs = 'output'
     return ins, mod, outs
 
+
 def extract_subgraphs(dag, node):
     out = []
 
@@ -225,15 +226,34 @@ def extract_subgraphs(dag, node):
     for p in dag_nx.predecessors(node):
         out.append({k: v for k, v in dag.items() if k in list(nx.dfs_preorder_nodes(reverse_dag_nx, p))})
 
+    common_nodes = [n for n in out[0] if all((n in o for o in out))]
+
+    preorder = list(nx.dfs_preorder_nodes(dag_nx, 'input'))
+    sorted_common = sorted(common_nodes, key=lambda k: -preorder.index(k))
+
+    inputs = np.unique([dag[n][0] for n in dag_nx.successors(sorted_common[0]) if any([n in o for o in out])])
+    assert len(inputs) == 1
+    input_id = inputs[0]
+    remove_common = sorted_common
+
+    nout = []
+
     for o in out:
+        no = dict()
+        no['input'] = ([], 'input', input_id)
         for k, v in o.items():
+            if k in remove_common:
+                continue
             ins = v[2]
             if not isinstance(ins, list):
                 ins = [ins]
             if ins[0] in dag[node][0]:
-                o[k] = v[0], v[1], 'output'
+                no[k] = v[0], v[1], 'output'
+                continue
+            no[k] = v
+        nout.append(no)
 
-    return out
+    return nout, input_id
 
 
 def normalize_dag(dag):
@@ -285,10 +305,11 @@ def process_boosters(dag):
 
 input_cache = {}
 
+
 def eval_dag(dag, filename, dag_id=None):
 
     dag = normalize_dag(dag)
-    # utils.draw_dag(dag)
+    utils.draw_dag(dag)
     # pprint.pprint(dag)
 
     if filename not in input_cache:
@@ -370,7 +391,7 @@ if __name__ == '__main__':
     results = dict()
 
     datafile = "winequality-white.csv"
-    dags = utils.read_json('test_boost.json')
+    dags = utils.read_json('test_errors.json')
 
     # pprint.pprint(normalize_dag(dags[0]))
 

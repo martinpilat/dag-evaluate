@@ -45,7 +45,10 @@ class KMeansSplitter:
         out = []
         for i in range(self.kmeans.n_clusters):
             idx = [n for n in range(len(preds)) if preds[n] == i]
-            out.append(x.iloc[idx])
+            if isinstance(x, pd.DataFrame):
+                out.append(x.iloc[idx])
+            else:
+                out.append(x[idx])
         mins = [min(x.index) for x in out]
         self.sorted_outputs = list(np.argsort(mins))
         return self
@@ -55,7 +58,10 @@ class KMeansSplitter:
         out = []
         for i in range(self.kmeans.n_clusters):
             idx = [n for n in range(len(preds)) if preds[n] == i]
-            out.append(x.iloc[idx])
+            if isinstance(x, pd.DataFrame):
+                out.append(x.iloc[idx])
+            else:
+                out.append(x[idx])
         return [out[i] for i in self.sorted_outputs]
 
 
