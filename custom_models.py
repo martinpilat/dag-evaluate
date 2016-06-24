@@ -126,6 +126,10 @@ class Workflow:
         import eval  #TODO: Refactor to remove circular imports
         return np.array(eval.test_dag(self.dag, self.models, test_data=(X, None)))
 
+    def transform(self, X):
+        import eval
+        return eval.test_dag(self.dag, self.models, test_data=(X, None), output='feats_only')
+
     def get_params(self, deep=False):
         return {'dag': self.dag}
 
@@ -136,18 +140,29 @@ class Workflow:
 
 class Stacker(Aggregator):
 
-    def __init__(self, sub_dags=[]):
+    def __init__(self, sub_dags=None, initial_dag=None):
         self.sub_dags = sub_dags
+        self.initial_dag = initial_dag
 
-    def fit(self, X, y):
+    def fit(self, X, y, sample_weight=None):
+        import eval
+        preds = [[] for _ in self.sub_dags]
 
-        preds = []
-        for dag in self.sub_dags:
-            wf = Workflow(dag)
-            preds.append(cross_validation.cross_val_predict(wf, X, y, cv=cross_validation.StratifiedKFold(y, n_folds=5)))
+        for train_idx, test_idx in cross_validation.StratifiedKFold(y, n_folds=5):
+            tr_X, tr_y = X.iloc[train_idx], y.iloc[train_idx]
+            tst_X, tst_y = X.iloc[test_idx], y.iloc[test_idx]
+            wf_init = Workflow(self.initial_dag)
+            wf_init.fit(tr_X, tr_y, sample_weight=sample_weight)
+            preproc_X, preproc_y = eval.test_dag(self.initial_dag, wf_init.models, test_data=(tr_X, tr_y), output='all')
+            for i, dag in enumerate(self.sub_dags):
+                wf = Workflow(dag)
+                wf.fit(preproc_X, preproc_y)
+                pp_tst_X = wf_init.transform(tst_X)
+                preds[i].append(pd.DataFrame(wf.predict(pp_tst_X), index=pp_tst_X.index))
 
-        self.train = pd.DataFrame(preds)
-        self.train = self.train.transpose()
+        preds = [pd.concat(ps) for ps in preds]
+
+        self.train = pd.concat(preds, axis=1)
         self.train.columns = ['p' + str(x) for x in range(len(preds))]
 
         return self

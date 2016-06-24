@@ -85,8 +85,8 @@ def train_dag(dag, train_data, sample_weight=None):
             ModelClass, model_params = utils.get_model_by_name(dag[m][1])
             out_name = dag[m][2]
             if dag[m][1][0] == 'stacker':
-                sub_dags, input_data = extract_subgraphs(dag, m)
-                model_params = dict(sub_dags=sub_dags)
+                sub_dags, initial_dag, input_data = extract_subgraphs(dag, m)
+                model_params = dict(sub_dags=sub_dags, initial_dag=initial_dag)
                 model = ModelClass(**model_params)
                 features, targets = data_cache[input_data]
             elif isinstance(out_name, list):
@@ -116,7 +116,7 @@ def train_dag(dag, train_data, sample_weight=None):
 
             # use the model to process the data
             if isinstance(model, custom_models.Stacker):
-                data_cache[out_name] = model.train, targets
+                data_cache[out_name] = model.train, targets.ix[model.train.index]
                 continue
             if isinstance(model, custom_models.Aggregator):
                 data_cache[out_name] = model.aggregate(features, targets)
@@ -145,7 +145,7 @@ def train_dag(dag, train_data, sample_weight=None):
     return models
 
 
-def test_dag(dag, models, test_data):
+def test_dag(dag, models, test_data, output='preds_only'):
     data_cache = dict()
     finished = dict()
 
@@ -203,8 +203,14 @@ def test_dag(dag, models, test_data):
 
             finished[m] = True
 
-    return data_cache['output'][1]
+    if output == 'all':
+        return data_cache['output']
+    if output == 'preds_only':
+        return data_cache['output'][1]
+    if output == 'feats_only':
+        return data_cache['output'][0]
 
+    raise AttributeError(output, 'is not a valid output type')
 
 def normalize_spec(spec):
     ins, mod, outs = spec
@@ -253,7 +259,15 @@ def extract_subgraphs(dag, node):
             no[k] = v
         nout.append(no)
 
-    return nout, input_id
+    initial_dag = {k: v for k, v in dag.items() if k in common_nodes}
+    for k, v in initial_dag.items():
+        if isinstance(v[2], list) and input_id in v[2]:
+            initial_dag[k] = (v[0], v[1], [x if x != input_id  else 'output' for x in v[2]])
+            break
+        if v[2] == input_id:
+            initial_dag[k] = (v[0], v[1], 'output')
+
+    return nout, initial_dag, input_id
 
 
 def normalize_dag(dag):
@@ -309,7 +323,7 @@ input_cache = {}
 def eval_dag(dag, filename, dag_id=None):
 
     dag = normalize_dag(dag)
-    utils.draw_dag(dag)
+    # utils.draw_dag(dag)
     # pprint.pprint(dag)
 
     if filename not in input_cache:
