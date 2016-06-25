@@ -68,6 +68,9 @@ def train_dag(dag, train_data, sample_weight=None):
     models = dict()
     data_cache = dict()
 
+    if isinstance(train_data[0], np.ndarray) and isinstance(train_data[1], np.ndarray): # happens inside booster
+        train_data = (pd.DataFrame(train_data[0]), pd.Series(train_data[1]))
+
     data_cache[dag['input'][2]] = train_data
     models['input'] = True
 
@@ -140,6 +143,7 @@ def train_dag(dag, train_data, sample_weight=None):
                     trans = pd.DataFrame(trans, index=features.index)       # we have only one output, can be numpy array
                 else:
                     trans = pd.DataFrame(trans)
+                trans.dropna(axis='columns', how='all', inplace=True)
                 data_cache[out_name] = (trans, targets)                 # save it
 
     return models
@@ -148,6 +152,12 @@ def train_dag(dag, train_data, sample_weight=None):
 def test_dag(dag, models, test_data, output='preds_only'):
     data_cache = dict()
     finished = dict()
+
+    if isinstance(test_data[0], np.ndarray):
+        test_data = (pd.DataFrame(test_data[0]), test_data[1])
+
+    if isinstance(test_data[1], np.ndarray):
+        test_data = (test_data[0], pd.Series(test_data[1], index=test_data[0].index))
 
     data_cache[dag['input'][2]] = test_data
     finished['input'] = True
@@ -199,6 +209,7 @@ def test_dag(dag, models, test_data, output='preds_only'):
                     trans = pd.DataFrame(trans, index=features.index)       # we have only one output, can be numpy array
                 else:
                     trans = pd.DataFrame(trans)
+                trans.dropna(axis='columns', how='all', inplace=True)
                 data_cache[out_name] = (trans, targets)                 # save it
 
             finished[m] = True
@@ -234,8 +245,8 @@ def extract_subgraphs(dag, node):
 
     common_nodes = [n for n in out[0] if all((n in o for o in out))]
 
-    preorder = list(nx.dfs_preorder_nodes(dag_nx, 'input'))
-    sorted_common = sorted(common_nodes, key=lambda k: -preorder.index(k))
+    toposort = list(nx.topological_sort(dag_nx))
+    sorted_common = sorted(common_nodes, key=lambda k: -toposort.index(k))
 
     inputs = np.unique([dag[n][0] for n in dag_nx.successors(sorted_common[0]) if any([n in o for o in out])])
     assert len(inputs) == 1
@@ -398,32 +409,10 @@ def eval_all(dags, filename):
 
 if __name__ == '__main__':
 
-    import shelve
-    import pickle
+    datafile = "wilt.csv"
+    dags = utils.read_json('test_err.json')
 
-    #results = shelve.open("results_wilt_tuned", protocol=pickle.HIGHEST_PROTOCOL)
     results = dict()
-
-    datafile = "winequality-white.csv"
-    dags = utils.read_json('test_errors.json')
-
-    # pprint.pprint(normalize_dag(dags[0]))
-
-    # dags = dags[36076:36077]
-
-    # for d in dags:
-    #     if (len(['ahoj tome' for k, v in d.items() if v[1][0]=='stacker'])) > 1:
-    #         print(d)
-
-    import matplotlib.pyplot as plt
-
-    # subgraphs = extract_subgraphs(normalize_dag(dags[0]), '95')
-
-    # pprint.pprint(subgraphs)
-
-    # g = dag_to_nx(dags[0])
-    # for p in g.predecessors('95'):
-    #     print(p, {k:v for k,v in dags[0].items() if k in list(nx.dfs_preorder_nodes(g.reverse(),  p))})
 
     remaining_dags = [d for d in enumerate(dags) if str(d[0]) not in results]
     print("Starting...", len(remaining_dags))

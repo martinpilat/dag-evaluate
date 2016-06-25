@@ -49,7 +49,7 @@ class KMeansSplitter:
                 out.append(x.iloc[idx])
             else:
                 out.append(x[idx])
-        mins = [min(x.index) for x in out]
+        mins = [len(x.index) for x in out]
         self.sorted_outputs = list(np.argsort(mins))
         return self
 
@@ -74,7 +74,7 @@ class ConstantModel:
         return self
 
     def predict(self, x):
-        return pd.DataFrame(np.array([self.cls]*len(x)), index=x.index)
+        return pd.Series(np.array([self.cls]*len(x)), index=x.index)
 
 
 class Aggregator:
@@ -98,7 +98,7 @@ class Voter(Aggregator):
         return f_frame, t_frame
 
     def aggregate(self, x, y):
-        if not x[0].index.equals(x[1].index):
+        if not all([x[0].index.equals(xi.index) for xi in x]):
             return self.union_aggregate(x, y)
         res = pd.DataFrame(index=y[0].index)
         for i in range(len(y)):
@@ -119,7 +119,7 @@ class Workflow:
     def fit(self, X, y, sample_weight=None):
         import eval  #TODO: Refactor to remove circular imports
         self.models = eval.train_dag(self.dag, train_data=(X, y), sample_weight=sample_weight)
-        self.classes_ = np.array([0,1,2,3,4,5])
+        self.classes_ = np.unique(y)
         return self
 
     def predict(self, X):
@@ -154,11 +154,14 @@ class Stacker(Aggregator):
             wf_init = Workflow(self.initial_dag)
             wf_init.fit(tr_X, tr_y, sample_weight=sample_weight)
             preproc_X, preproc_y = eval.test_dag(self.initial_dag, wf_init.models, test_data=(tr_X, tr_y), output='all')
+            pp_tst_X = wf_init.transform(tst_X)
+            if pp_tst_X.empty:
+                continue
             for i, dag in enumerate(self.sub_dags):
                 wf = Workflow(dag)
                 wf.fit(preproc_X, preproc_y)
-                pp_tst_X = wf_init.transform(tst_X)
-                preds[i].append(pd.DataFrame(wf.predict(pp_tst_X), index=pp_tst_X.index))
+                res = wf.predict(pp_tst_X)
+                preds[i].append(pd.DataFrame(res, index=pp_tst_X.index))
 
         preds = [pd.concat(ps) for ps in preds]
 
