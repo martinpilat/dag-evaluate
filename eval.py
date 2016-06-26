@@ -8,7 +8,6 @@ import pprint
 import ml_metrics as mm
 import numpy as np
 import pandas as pd
-from scoop import futures
 from sklearn import cross_validation, preprocessing, decomposition, feature_selection
 
 import networkx as nx
@@ -383,29 +382,6 @@ def safe_dag_eval(dag, filename, dag_id=None):
                 err.write(line)
             err.write(json.dumps(dag))
     return (), dag_id
-
-
-class Evaluator:
-
-    def __init__(self, filename):
-        self.filename = filename
-
-    def __call__(self, x):
-        return safe_dag_eval(x[1], self.filename, x[0])
-
-
-def eval_all(dags, filename):
-
-    results = {}
-
-    inner_eval = Evaluator(filename)
-
-    for e in futures.map_as_completed(inner_eval, enumerate(dags)):
-        results[str(e[1])] = e
-
-    res = [results[str(d[0])][0] for d in enumerate(dags)]
-
-    return res
 
 if __name__ == '__main__':
 

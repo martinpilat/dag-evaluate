@@ -2,7 +2,6 @@ __author__ = 'Martin'
 
 import json
 import method_params
-import pydot_ng as pydot
 import networkx as nx
 
 
@@ -54,6 +53,7 @@ def dag_to_nx(dag):
     return graph
 
 def to_pydot_graph(dag, sub_graph=False, input_edge=None):
+    import pydot_ng as pydot
     gid = dag['input'][2][:-2]
     graph = pydot.Dot(graph_type='digraph')
     if sub_graph:
