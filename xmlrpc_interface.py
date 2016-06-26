@@ -29,6 +29,7 @@ class DagEvalServer:
 
     def __init__(self, log_path):
         self.log_path = log_path
+        os.makedirs(self.log_path)
         self.gen_number = 0
         self.inputs = multiprocessing.Queue()
         self.outputs = multiprocessing.Queue()
@@ -64,7 +65,7 @@ class DagEvalServer:
                                  eval_time=eval_time,
                                  in_queue_time=in_queue_time,
                                  out_queue_time=out_queue_time))
-            if len(self.log) == 5:
+            if len(self.log) == 100:
                 log_fn = os.path.join(self.log_path, 'log_%03d.json' % self.gen_number)
                 with open(log_fn, 'w') as log_file:
                     json.dump(self.log, log_file)
