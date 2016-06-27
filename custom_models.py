@@ -38,19 +38,22 @@ class KMeansSplitter:
         from sklearn import cluster
         self.kmeans = cluster.KMeans(n_clusters=k)
         self.sorted_outputs = None
+        self.weight_idx = []
 
-    def fit(self, x, y):
+    def fit(self, x, y, sample_weight=None):
         self.kmeans.fit(x, y)
         preds = self.kmeans.predict(x)
         out = []
         for i in range(self.kmeans.n_clusters):
             idx = [n for n in range(len(preds)) if preds[n] == i]
+            self.weight_idx.append(idx)
             if isinstance(x, pd.DataFrame):
                 out.append(x.iloc[idx])
             else:
                 out.append(x[idx])
         mins = [len(x.index) for x in out]
         self.sorted_outputs = list(np.argsort(mins))
+        self.weight_idx = [self.weight_idx[i] for i in self.sorted_outputs]
         return self
 
     def transform(self, x):
@@ -91,6 +94,11 @@ class Voter(Aggregator):
         f_list, t_list = x, y
         f_frame, t_frame = pd.DataFrame(), pd.Series()
         for i in range(len(t_list)):
+            fl = f_list[i]
+            assert isinstance(fl, pd.DataFrame)
+            if fl.columns.dtype == np.dtype('int64'):
+                cols = map(lambda z: str(id(fl)) + '_' + str(z), fl.columns)
+                fl.columns = cols
             t_frame = t_frame.append(t_list[i])
             f_frame = f_frame.append(f_list[i])
         f_frame.sort_index(inplace=True)

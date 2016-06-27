@@ -20,7 +20,7 @@ memory = joblib.Memory(cachedir='C:/cache', verbose=False)
 
 @memory.cache
 def fit_model(model, values, targets, sample_weight=None):
-    if isinstance(model, ClassifierMixin) or isinstance(model, RegressorMixin):
+    if isinstance(model, ClassifierMixin) or isinstance(model, RegressorMixin) or isinstance(model, custom_models.KMeansSplitter):
         return model.fit(values, targets, sample_weight=sample_weight)
     return model.fit(values, targets)
 
@@ -83,7 +83,9 @@ def train_dag(dag, train_data, sample_weight=None):
             # print("Processing:", m)
 
             # obtain the data
-            features, targets = get_data(dag[m][0], data_cache)
+            features, targets, *rest = get_data(dag[m][0], data_cache)
+            if rest:
+                sample_weight = rest[0]
             ModelClass, model_params = utils.get_model_by_name(dag[m][1])
             out_name = dag[m][2]
             if dag[m][1][0] == 'stacker':
@@ -134,7 +136,10 @@ def train_dag(dag, train_data, sample_weight=None):
 
             # save the outputs
             if isinstance(trans, list):         # the previous model divided the data into several data-sets
-                trans = [(x, targets.loc[x.index]) for x in trans]     # need to divide the targets
+                if isinstance(model, custom_models.KMeansSplitter) and sample_weight is not None:
+                    trans = [(x, targets.loc[x.index], sample_weight[model.weight_idx[i]]) for i, x in enumerate(trans)]  # need to divide the targets and the weights
+                else:
+                    trans = [(x, targets.loc[x.index]) for x in trans]     # need to divide the targets
                 for i in range(len(trans)):
                     data_cache[out_name[i]] = trans[i]          # save all the data to the cache
             else:

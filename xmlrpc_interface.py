@@ -29,7 +29,7 @@ class DagEvalServer:
 
     def __init__(self, log_path):
         self.log_path = log_path
-        os.makedirs(self.log_path)
+        os.makedirs(self.log_path, exist_ok=True)
         self.gen_number = 0
         self.inputs = multiprocessing.Queue()
         self.outputs = multiprocessing.Queue()
