@@ -16,7 +16,7 @@ import custom_models
 import utils
 from sklearn.base import ClassifierMixin, RegressorMixin
 
-memory = joblib.Memory(cachedir='C:/cache', verbose=False)
+memory = joblib.Memory(cachedir='cache', verbose=False)
 
 @memory.cache
 def fit_model(model, values, targets, sample_weight=None):

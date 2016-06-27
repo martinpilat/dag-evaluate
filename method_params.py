@@ -20,11 +20,10 @@ model_names = {
 }
 
 
-def create_param_set(num_features, num_instances):
+def create_param_set():
     """
     Creates the set of parameters for all the methods supported by the dag evaluator.
     :param num_features: The number of features in the dataset.
-    :param num_instances: The number of instances in the dataset.
     :return: Dictionary containing dictionaries with lists of values of parameters for each method.
     """
 

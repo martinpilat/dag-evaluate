@@ -4,7 +4,6 @@ from xmlrpc.server import SimpleXMLRPCServer
 import json
 import eval
 import method_params
-import pandas as pd
 import os
 import sys
 import multiprocessing
@@ -17,6 +16,7 @@ def eval_dags(inputs: multiprocessing.Queue, outputs: multiprocessing.Queue):
     while True:
         try:
             ind_id, ind_dag, filename, log_info = inputs.get(block=False)
+            log_info['size'] = len(ind_dag)
             log_info['eval_start'] = time.time()
             errors, id = eval.safe_dag_eval(dag=ind_dag, filename=filename, dag_id=ind_id)
             assert ind_id == id
@@ -62,15 +62,12 @@ class DagEvalServer:
                                  id=ind_id,
                                  kappa=kappa,
                                  std=std,
+                                 size=log_info['size'],
                                  eval_time=eval_time,
                                  in_queue_time=in_queue_time,
                                  out_queue_time=out_queue_time))
             if len(self.log) == 100:
-                log_fn = os.path.join(self.log_path, 'log_%03d.json' % self.gen_number)
-                with open(log_fn, 'w') as log_file:
-                    json.dump(self.log, log_file)
-                self.log = []
-                self.gen_number += 1
+                self.__write_logs()
             return json.dumps([[ind_id, ind_eval]])
         except:
             return json.dumps([])
@@ -110,17 +107,23 @@ class DagEvalServer:
     def get_param_sets(self, datafile):
         """
         Returns the set of possible values of parameters for each method based on the given datafile.
-        :param datafile: The name of the dataset for which the parameters should be generated. Some parameters depend
-            e.g. on the number of attributes in the dataset (like the n_components in PCA).
         :return: The JSON string containing the dictionary of the parameter values for each supported method.
         """
-        ds = pd.read_csv(os.path.join('data', datafile), sep=';')
-        num_instances, num_features = ds.shape
-        return method_params.create_param_set(num_features - 1, num_instances)
+        return method_params.create_param_set()
 
     def quit(self):
+        self.__write_logs()
         global stop_server
         stop_server = True
+        return json.dumps('OK')
+
+    def __write_logs(self):
+        log_fn = os.path.join(self.log_path, 'log_%03d.json' % self.gen_number)
+        with open(log_fn, 'w') as log_file:
+            json.dump(self.log, log_file)
+        self.log = []
+        self.gen_number += 1
+
 
 if __name__ == '__main__':
 
