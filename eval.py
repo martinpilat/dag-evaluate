@@ -4,6 +4,7 @@ import sys
 import time
 import joblib
 import pprint
+import os
 
 import ml_metrics as mm
 import numpy as np
@@ -16,7 +17,12 @@ import custom_models
 import utils
 from sklearn.base import ClassifierMixin, RegressorMixin
 
-memory = joblib.Memory(cachedir='cache', verbose=False)
+cache_dir = 'cache'
+if os.path.exists('/media/ramdisk'):
+    cache_dir = '/media/ramdisk/cache'
+    print('Using ramdisk')
+
+memory = joblib.Memory(cachedir=cache_dir, verbose=False)
 
 @memory.cache
 def fit_model(model, values, targets, sample_weight=None):
