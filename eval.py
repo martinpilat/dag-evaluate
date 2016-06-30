@@ -9,7 +9,7 @@ import os
 import ml_metrics as mm
 import numpy as np
 import pandas as pd
-from sklearn import cross_validation, preprocessing, decomposition, feature_selection
+from sklearn import cross_validation, preprocessing, decomposition, feature_selection, metrics
 
 import networkx as nx
 
@@ -330,6 +330,7 @@ def process_boosters(dag):
                 if node_type == 'booEnd':
                     sub_dags = [normalize_dag(sd) for sd in sub_dags]
                     processed_dag[k] = (input_name, ['booster', {'sub_dags': sub_dags}], dag[node][2])
+                    sub_dags = []
                     break
         elif spec[1][0] in ['booster', 'booEnd']:
             continue
@@ -372,6 +373,8 @@ def eval_dag(dag, filename, dag_id=None):
         preds = test_dag(dag, ms, test_data)
 
         acc = mm.quadratic_weighted_kappa(test_data[1], preds)
+        if filename == 'ml-prove.csv':
+            acc = metrics.accuracy_score(test_data[1], preds)
         errors.append(acc)
 
     m_errors = float(np.mean(errors))
@@ -396,7 +399,7 @@ def safe_dag_eval(dag, filename, dag_id=None):
 
 if __name__ == '__main__':
 
-    datafile = "wilt.csv"
+    datafile = "ml-prove.csv"
     dags = utils.read_json('test_err.json')
 
     results = dict()
