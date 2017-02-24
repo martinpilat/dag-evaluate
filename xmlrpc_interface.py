@@ -135,11 +135,19 @@ if __name__ == '__main__':
     if len(sys.argv) > 2:
         n_cpus = int(sys.argv[2])
 
+    port_number = 8080
+
+    if len(sys.argv) > 3:
+        config = json.load(open(sys.argv[3]))
+        server_url = config['serverUrl']
+        port_number = int(server_url.split(':')[-1])
+
     print('log', log_path)
+    print('port_number', port_number)
 
     eval_server = DagEvalServer(log_path, n_cpus)
 
-    server = SimpleXMLRPCServer(('localhost', 8080))
+    server = SimpleXMLRPCServer(('localhost', port_number))
     server.register_instance(eval_server)
 
     while not stop_server:
