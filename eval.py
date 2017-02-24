@@ -15,6 +15,8 @@ import networkx as nx
 
 import custom_models
 import utils
+import inspect
+
 from sklearn.base import ClassifierMixin, RegressorMixin
 
 cache_dir = 'cache'
@@ -27,7 +29,8 @@ memory = joblib.Memory(cachedir=cache_dir, verbose=False)
 @memory.cache
 def fit_model(model, values, targets, sample_weight=None):
     if isinstance(model, ClassifierMixin) or isinstance(model, RegressorMixin) or isinstance(model, custom_models.KMeansSplitter):
-        return model.fit(values, targets, sample_weight=sample_weight)
+        if 'sample_weight' in inspect.signature(model.fit).parameters:
+            return model.fit(values, targets, sample_weight=sample_weight)
     return model.fit(values, targets)
 
 def data_ready(req, cache):

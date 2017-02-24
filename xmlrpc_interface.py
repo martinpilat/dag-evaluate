@@ -27,13 +27,16 @@ def eval_dags(inputs: multiprocessing.Queue, outputs: multiprocessing.Queue):
 
 class DagEvalServer:
 
-    def __init__(self, log_path):
+    def __init__(self, log_path, n_cpus):
+        if n_cpus < 0:
+            n_cpus = multiprocessing.cpu_count()
+        self.n_cpus = n_cpus
         self.log_path = log_path
         os.makedirs(self.log_path, exist_ok=True)
         self.gen_number = 0
         self.inputs = multiprocessing.Queue()
         self.outputs = multiprocessing.Queue()
-        self.processes = [multiprocessing.Process(target=eval_dags, args=(self.inputs, self.outputs)) for _ in range(multiprocessing.cpu_count())]
+        self.processes = [multiprocessing.Process(target=eval_dags, args=(self.inputs, self.outputs)) for _ in range(n_cpus)]
         for p in self.processes:
             p.start()
         self.log = []
@@ -73,7 +76,7 @@ class DagEvalServer:
             return json.dumps([])
 
     def get_core_count(self):
-        return json.dumps(multiprocessing.cpu_count())
+        return json.dumps(self.n_cpus)
 
     def kill_workers(self):
         for p in self.processes:
@@ -128,9 +131,13 @@ class DagEvalServer:
 if __name__ == '__main__':
 
     log_path = sys.argv[1]
+    n_cpus = 1
+    if len(sys.argv) > 2:
+        n_cpus = int(sys.argv[2])
+
     print('log', log_path)
 
-    eval_server = DagEvalServer(log_path)
+    eval_server = DagEvalServer(log_path, n_cpus)
 
     server = SimpleXMLRPCServer(('localhost', 8080))
     server.register_instance(eval_server)

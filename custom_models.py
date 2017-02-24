@@ -192,7 +192,7 @@ class Booster(ensemble.AdaBoostClassifier):
         self.current_sub_dag = 0
         super(Booster, self).__init__(base_estimator=Workflow(), n_estimators=len(sub_dags), algorithm='SAMME')
 
-    def _make_estimator(self, append=True):
+    def _make_estimator(self, append=True, random_state=0):
 
         estimator = Workflow(self.sub_dags[self.current_sub_dag])
         self.current_sub_dag += 1
