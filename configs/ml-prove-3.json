@@ -1,0 +1,36 @@
+{
+
+  "serverUrl" : "http://127.0.0.1:8080",
+  "dataset" : "ml-prove.csv",
+  "killServer": true,
+  "dummyFitness": false,
+
+  "timeLimit": 36000,
+
+  "numEvaluations": 17920,
+  "numIndividualsToGenerate": 256,
+  "minPopulationSizeToOperate": 64,
+  "maxPopulationSize": 512,
+
+  "generatingMaxTreeSize":  64,
+
+  "tournamentBetterWinsProbability" : 0.8,
+  "saveBest" : true,
+
+  "operators" : [
+    {"name": "basicTypedXover", "probability": 0.4 , "maxTreeSize": 128},
+    {"name": "sameSizeSubtreeMutation", "probability": 0.3, "maxSubtreeSize": 32},
+    {"name": "oneParamMutation", "probability" : 0.3, "shiftsWithProbabilities": [[-2, 0.1], [-1, 0.4], [1, 0.4], [2, 0.1]]}
+  ],
+
+  "methods": {
+    "basic": ["SVC", "logR", "gaussianNB", "DT", "Perceptron", "SGD", "PAC", "LDA", "QDA", "MLP"],
+    "preprocessing": ["PCA", "kBest"],
+    "splitter_disjoint": ["kMeans"],
+    "splitter_copy": ["copy"],
+    "merger": ["vote"],
+    "stacking": true,
+    "boosting": true
+  }
+
+}
