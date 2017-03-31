@@ -4,9 +4,26 @@ import custom_models
 import pandas as pd
 import ml_metrics as mm
 import numpy as np
+import functools
+import warnings
 
 from sklearn import cross_validation, metrics, preprocessing
-from multiprocessing import Pool
+from multiprocessing import Pool, Value, Lock
+
+class Counter(object):
+    def __init__(self, initval=0):
+        self.val = Value('i', initval)
+        self.lock = Lock()
+
+    def increment(self):
+        with self.lock:
+            self.val.value += 1
+
+    def value(self):
+        with self.lock:
+            return self.val.value
+
+warnings.filterwarnings("ignore",category=DeprecationWarning)
 
 def make_grid(param_set, partial_dict):
     if not param_set:
@@ -24,7 +41,7 @@ def make_grid(param_set, partial_dict):
             break
     return result
 
-def test_classifier(clsClass, parameters):
+def test_classifier(parameters, clsClass, feats, targets, filename):
     errors = []
     for train_idx, test_idx in cross_validation.StratifiedKFold(targets, n_folds=5):
         cls = clsClass(**parameters)
@@ -41,32 +58,37 @@ def test_classifier(clsClass, parameters):
 
     return errors, parameters
 
-param_set = json.loads(method_params.create_param_set())
-filename = 'wilt.csv'
+if __name__ == '__main__':
 
-data = pd.read_csv('data/' + filename, sep=';')
-feats = data[data.columns[:-1]]
-targets = data[data.columns[-1]]
-le = preprocessing.LabelEncoder()
+    param_set = json.loads(method_params.create_param_set())
+    filename = 'ml-prove.csv'
 
-ix = targets.index
-targets = pd.Series(le.fit_transform(targets), index=ix)
+    data = pd.read_csv('data/' + filename, sep=';')
+    feats = data[data.columns[:-1]]
+    targets = data[data.columns[-1]]
+    le = preprocessing.LabelEncoder()
 
-best_results = {}
+    ix = targets.index
+    targets = pd.Series(le.fit_transform(targets), index=ix)
 
-for model_name in param_set:
-    if model_name == 'SGD' or model_name == 'MLP':
-        continue
-    clsClass = method_params.model_names[model_name]
-    if custom_models.is_predictor(clsClass):
-        best_results[model_name] = (-100, [], [])
-        grid = make_grid(param_set[model_name], {})
-        p = Pool(4)
-        error_list = p.map(lambda params: test_classifier(clsClass, params), grid)
+    best_results = {}
 
-        for errors, params in error_list:
-            if best_results[model_name][0] < np.mean(errors):
-                best_results[model_name] = (np.mean(errors), params, errors)
-                print(best_results[model_name])
+    for model_name in param_set:
+        if model_name == 'SGD' or model_name == 'MLP':
+            continue
+        clsClass = method_params.model_names[model_name]
+        if custom_models.is_predictor(clsClass):
+            best_results[model_name] = (-100, [], [])
+            grid = make_grid(param_set[model_name], {})
+            print('running', model_name, 'total', len(grid))
+            p = Pool(4)
+            f = functools.partial(test_classifier, clsClass=clsClass, feats=feats, targets=targets, filename=filename)
+            error_list = p.map(f, grid)
 
-print(best_results)
+            for errors, params in error_list:
+                if best_results[model_name][0] < np.mean(errors):
+                    best_results[model_name] = (np.mean(errors), params, errors)
+
+            print(model_name, best_results[model_name])
+
+    print(best_results)

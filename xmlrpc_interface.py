@@ -54,26 +54,29 @@ class DagEvalServer:
 
     def get_evaluated(self):
 
+        evaluated = []
+
         try:
-            ind_id, ind_eval, ind_dag, log_info = self.outputs.get(block=False)
-            kappa = ind_eval[0] if ind_eval else 'error'
-            std = ind_eval[1] if ind_eval else 'error'
-            eval_time = ind_eval[2] if ind_eval else 'error'
-            in_queue_time = log_info['eval_start'] - log_info['submitted']
-            out_queue_time = time.time() - log_info['eval_end']
-            self.log.append(dict(dag=ind_dag,
-                                 id=ind_id,
-                                 kappa=kappa,
-                                 std=std,
-                                 size=log_info['size'],
-                                 eval_time=eval_time,
-                                 in_queue_time=in_queue_time,
-                                 out_queue_time=out_queue_time))
-            if len(self.log) == 100:
-                self.__write_logs()
-            return json.dumps([[ind_id, ind_eval]])
+            while True:
+                ind_id, ind_eval, ind_dag, log_info = self.outputs.get(block=False)
+                kappa = ind_eval[0] if ind_eval else 'error'
+                std = ind_eval[1] if ind_eval else 'error'
+                eval_time = ind_eval[2] if ind_eval else 'error'
+                in_queue_time = log_info['eval_start'] - log_info['submitted']
+                out_queue_time = time.time() - log_info['eval_end']
+                self.log.append(dict(dag=ind_dag,
+                                     id=ind_id,
+                                     kappa=kappa,
+                                     std=std,
+                                     size=log_info['size'],
+                                     eval_time=eval_time,
+                                     in_queue_time=in_queue_time,
+                                     out_queue_time=out_queue_time))
+                if len(self.log) == 100:
+                    self.__write_logs()
+                evaluated.append([ind_id, ind_eval])
         except:
-            return json.dumps([])
+            return json.dumps(evaluated)
 
     def get_core_count(self):
         return json.dumps(self.n_cpus)
